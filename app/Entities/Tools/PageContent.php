@@ -71,7 +71,8 @@ class PageContent
         $imageNodes = $xPath->query('//img[contains(@src, \'data:image\')]');
         foreach ($imageNodes as $imageNode) {
             $imageSrc = $imageNode->getAttribute('src');
-            $newUrl = $this->base64ImageUriToUploadedImageUrl($imageSrc);
+            $filename = ""; // $imageNode->getAttribute('filename');
+            $newUrl = $this->base64ImageUriToUploadedImageUrl($imageSrc, $filename);
             $imageNode->setAttribute('src', $newUrl);
         }
 
@@ -109,7 +110,14 @@ class PageContent
                 $dataUri .= $char;
             }
 
-            $newUrl = $this->base64ImageUriToUploadedImageUrl($dataUri);
+            // $matches[0][0][0]: ![image:example.jpg](data:image/jpg;base64,
+            $filename = "";
+            $matchesFilename = array();
+            if ( preg_match("/!\[image\:(.*?)]/", $matches[0][0][0], $matchesFilename) ) {
+                $filename = $matchesFilename[1];
+            }
+
+            $newUrl = $this->base64ImageUriToUploadedImageUrl($dataUri, $filename);
             $replacements[] = [$dataUri, $newUrl];
         }
 
@@ -124,7 +132,7 @@ class PageContent
      * Parse the given base64 image URI and return the URL to the created image instance.
      * Returns an empty string if the parsed URI is invalid or causes an error upon upload.
      */
-    protected function base64ImageUriToUploadedImageUrl(string $uri): string
+    protected function base64ImageUriToUploadedImageUrl(string $uri, string $filename): string
     {
         $imageRepo = app()->make(ImageRepo::class);
         $imageInfo = $this->parseBase64ImageUri($uri);
@@ -142,6 +150,10 @@ class PageContent
 
         // Save image from data with a random name
         $imageName = 'embedded-image-' . Str::random(8) . '.' . $imageInfo['extension'];
+
+        if (strlen($filename) > 0) {
+            $imageName = $filename;
+        }
 
         try {
             $image = $imageRepo->saveNewFromData($imageName, $imageInfo['data'], 'gallery', $this->page->id);
